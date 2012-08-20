@@ -1116,6 +1116,17 @@ FreeBSD_MAINTAINER=	portmgr@FreeBSD.org
 #				  has been specified in distinfo.  This is useful
 #				  when using an alternate FETCH_CMD.
 #
+############### PAR_PORTS SPECIFIC COMMENT LINE ############### 
+# Parallel ports build vriables
+# 
+# _parv_WANT_PARALLEL_BUILD 	
+#				- trigger for parallel ports installation. Set this variable to
+#				  some value to enable parallel ports build/install.
+#				  It does not matter what value is assigned.
+#				  Example: _parv_WANT_PARALLEL_BUILD=yes
+#
+############### ENDF OF PAR_PORTS SPECIFIC COMMENT LINE  ###############
+#
 # End of the list of all variables that need to be defined in a port.
 # Most port authors should not need to understand anything after this point.
 #
@@ -1480,6 +1491,78 @@ PKGCOMPATDIR?=		${LOCALBASE}/lib/compat/pkg
 .include "${PORTSDIR}/Mk/bsd.ncurses.mk"
 .endif
 
+############### PAR_PORTS SPECIFIC COMMENT LINE ############### 
+
+# TODO: doc needed
+.if defined(_parv_WANT_NON_PARALLEL_BUILD)
+.undef _parv_WANT_PARALLEL_BUILD
+.endif
+
+.if defined(_parv_WANT_PARALLEL_BUILD)
+.include "${PORTSDIR}/Mk/bsd.parallel.mk"
+.endif
+
+_PROCESS_ACTIVE_BUILDS?= ${DO_NADA}
+_parv_PRINT_ACTIVE_BUILDS?= ${DO_NADA}
+_parv_CHECK_ALL_DEPS_LOCKED?= ${DO_NADA}
+
+.if !target(lock-port-dbdir)
+lock-port-dbdir:
+	@${DO_NADA}
+.endif
+
+.if !target(lock-pkg-dbdir)
+lock-pkg-dbdir:
+	@${DO_NADA}
+.endif
+
+.if !target(unlock-port-dbdir)
+unlock-port-dbdir:
+	@${DO_NADA}
+.endif
+
+.if !target(unlock-pkg-dbdir)
+unlock-pkg-dbdir:
+	@${DO_NADA}
+.endif
+
+.if !target(check-active-build-conflicts)
+check-active-build-conflicts:
+	@${DO_NADA}
+.endif
+
+.if !target(locking-config-recursive)
+locking-config-recursive:
+	@${DO_NADA}
+.endif
+
+.if !target(locking-config-message)
+locking-config-message:
+	@${DO_NADA}
+.endif
+
+.if !target(check-license-depends)
+check-license-depends:
+	@${DO_NADA}
+.endif
+
+############### ENDF OF PAR_PORTS SPECIFIC COMMENT LINE  ###############
+
+############### PAR_PORTS SPECIFIC COMMENT LINE ###############
+#
+.if defined(_parv_WANT_PARALLEL_BUILD) || !defined(IGNORE_PATH_CHECKS)
+.BEGIN:
+.	if defined(_parv_WANT_PARALLEL_BUILD)
+	@${_parv_CHECK_DIRS_SANITY}
+.		if ${_parv_IS_DEFAULT_TARGET}
+.			if defined(INSTALLS_DEPENDS)
+	@( ${_parv_LOCK_DIR_LOCK_LOOP} ) || { ${_parv_ON_LOCK_EXIT_SEQ}; }
+.			else
+	@attempts=-1; ${_parv_LOCK_DIR_LOCK_LOOP}
+.			endif
+.		endif
+.	endif
+
 # You can force skipping these test by defining IGNORE_PATH_CHECKS
 .if !defined(IGNORE_PATH_CHECKS)
 .if (${PREFIX:C,(^.).*,\1,} != "/")
@@ -1489,6 +1572,15 @@ PKGCOMPATDIR?=		${LOCALBASE}/lib/compat/pkg
 	@${FALSE}
 .endif
 .endif
+.endif #defined(_parv_WANT_PARALLEL_BUILD) || !defined(IGNORE_PATH_CHECKS)
+
+.if defined(_parv_WANT_PARALLEL_BUILD)
+.END:
+.	if ${_parv_IS_DEFAULT_TARGET}
+		@${_parv_LOCK_DIR_DO_UNLOCK}
+.	endif
+.endif
+
 
 # Location of mounted CDROM(s) to search for files
 CD_MOUNTPTS?=	/cdrom ${CD_MOUNTPT}
@@ -2869,6 +2961,11 @@ VALID_CATEGORIES+= accessibility afterstep arabic archivers astro audio \
 	x11 x11-clocks x11-drivers x11-fm x11-fonts x11-servers x11-themes \
 	x11-toolkits x11-wm xfce zope
 
+############### PAR_PORTS SPECIFIC COMMENT LINE ############### 
+############### THIS ENTRY IS FOR DEBUGGING PURPOSE  ###############
+VALID_CATEGORIES+=fake_ports
+############### ENDF OF PAR_PORTS SPECIFIC COMMENT LINE  ###############
+
 check-categories:
 .for cat in ${CATEGORIES}
 .	if empty(VALID_CATEGORIES:M${cat})
@@ -3745,7 +3842,7 @@ do-build:
 # Check conflicts
 
 .if !target(check-conflicts)
-check-conflicts: check-build-conflicts check-install-conflicts
+check-conflicts: check-active-build-conflicts check-build-conflicts check-install-conflicts
 .endif
 
 .if !target(check-build-conflicts)
@@ -4262,13 +4359,13 @@ _CHROOT_SEQ=
 .endif
 _SANITY_SEQ=	${_CHROOT_SEQ} pre-everything check-makefile \
 				check-categories check-makevars check-desktop-entries \
-				check-depends identify-install-conflicts check-deprecated \
+				check-depends check-active-build-conflicts identify-install-conflicts check-deprecated \
 				check-vulnerable check-license check-config buildanyway-message \
-				options-message
+				options-message locking-config-recursive check-license-depends
 
-_PKG_DEP=		check-sanity
+_PKG_DEP=		check-sanity locking-config-recursive
 _PKG_SEQ=		pkg-depends
-_FETCH_DEP=		pkg
+_FETCH_DEP=		pkg locking-config-recursive
 _FETCH_SEQ=		fetch-depends pre-fetch pre-fetch-script \
 				do-fetch post-fetch post-fetch-script
 _EXTRACT_DEP=	fetch
@@ -4294,7 +4391,7 @@ _INSTALL_SUSEQ= check-umask install-mtree pre-su-install \
 				post-install post-install-script add-plist-info \
 				add-plist-docs add-plist-examples add-plist-data \
 				add-plist-post fix-plist-sequence compress-man \
-				install-ldconfig-file fake-pkg security-check
+				install-ldconfig-file lock-pkg-dbdir fake-pkg unlock-pkg-dbdir security-check
 _PACKAGE_DEP=	install
 _PACKAGE_SEQ=	package-message pre-package pre-package-script \
 				do-package post-package-script
@@ -4325,7 +4422,7 @@ pkg: ${_PKG_DEP} ${_PKG_SEQ}
 .if !target(${target}) && defined(_OPTIONS_OK)
 ${target}: ${${target:U}_COOKIE}
 .elif !target(${target})
-${target}: config-conditional
+${target}: locking-config-recursive config-conditional
 	@cd ${.CURDIR} && ${MAKE} CONFIG_DONE_${UNIQUENAME:U}=1 ${${target:U}_COOKIE}
 .elif target(${target}) && defined(IGNORE)
 .endif
@@ -4970,6 +5067,13 @@ _DEPEND_ALWAYS=	1
 _DEPEND_ALWAYS=	0
 .endif
 
+############### PAR_PORTS SPECIFIC COMMENT LINE ############### 
+#
+# $${spawned}	- sets to background process PID if any process was ran
+#				  in background.
+#
+############### END OF PAR_PORTS SPECIFIC COMMENT LINE  ###############
+
 _INSTALL_DEPENDS=	\
 		if [ X${USE_PACKAGE_DEPENDS} != "X" ]; then \
 			subpkgfile=`(cd $$dir; ${MAKE} $$depends_args -V PKGFILE)`; \
@@ -4986,18 +5090,51 @@ _INSTALL_DEPENDS=	\
 					${PKG_ADD} $${subpkgfile}; \
 				fi; \
 			else \
-			  (cd $$dir; ${MAKE} -DINSTALLS_DEPENDS $$target $$depends_args) ; \
+				if [ ${_parv_WANT_PARALLEL_BUILD} ]; then \
+					log_file=${_parv_PORTS_LOGS_DIR}/${_parv_PORT_LOG_FILE}; \
+					( \
+						cd $$dir; ${MAKE} -DINSTALLS_DEPENDS $$target $$depends_args \
+						> $${log_file} 2> $${log_file} \
+					) & spawned=$$!; \
+				else \
+					(cd $$dir; ${MAKE} -DINSTALLS_DEPENDS $$target $$depends_args); \
+					spawned="yes"; \
+				fi; \
 			fi; \
 		else \
-			(cd $$dir; ${MAKE} -DINSTALLS_DEPENDS $$target $$depends_args) ; \
+			if [ ${_parv_WANT_PARALLEL_BUILD} ]; then \
+				log_file=${_parv_PORTS_LOGS_DIR}/${_parv_PORT_LOG_FILE}; \
+				( \
+					cd $$dir; ${MAKE} -DINSTALLS_DEPENDS $$target $$depends_args \
+					> $${log_file} 2> $${log_file} \
+				) & spawned=$$!; \
+			else \
+				(cd $$dir; ${MAKE} -DINSTALLS_DEPENDS $$target $$depends_args); \
+				spawned="yes"; \
+			fi; \
 		fi; \
-		${ECHO_MSG} "===>   Returning to build of ${PKGNAME}";
+
+############### PAR_PORTS SPECIFIC COMMENT LINE ############### 
+#
+# $${notfound} codes : 0 - dep found
+#					   1 - dep not found
+#					   ${_parv_ON_LOCK_EXIT_STATUS} - dep is locked
+#
+############### END OF PAR_PORTS SPECIFIC COMMENT LINE  ###############
 
 .for deptype in PKG EXTRACT PATCH FETCH BUILD RUN
 ${deptype:L}-depends:
 .if defined(${deptype}_DEPENDS)
 .if !defined(NO_DEPENDS)
-	@for i in `${ECHO_CMD} "${${deptype}_DEPENDS}"`; do \
+	@if [ ! ${INSTALLS_DEPENDS} ]; then \
+		trap '${_TERMINATE_PROCESS_TREE}' EXIT INT TERM; \
+		trap 'exit 1' INT TERM; \
+	fi; \
+	depends=`${ECHO_CMD} "${${deptype}_DEPENDS}"`; \
+	depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
+	active_builds=""; \
+	while [ $${#depends} -ne 0 ]; do \
+		i=$${depends%% *}; \
 		prog=$${i%%:*}; \
 		if [ -z "$$prog" ]; then \
 			${ECHO_MSG} "Error: there is an empty port dependency in ${deptype}_DEPENDS."; \
@@ -5018,6 +5155,9 @@ ${deptype:L}-depends:
 		else \
 			target="${DEPENDS_TARGET}"; \
 			depends_args="${DEPENDS_ARGS}"; \
+		fi; \
+		if [ ${_parv_WANT_PARALLEL_BUILD} ]; then \
+			( attempts=-1; ${_parv_PKG_DBDIR_LOCK_LOOP} ); \
 		fi; \
 		if ${EXPR} "$$prog" : \\/ >/dev/null; then \
 			if [ -e "$$prog" ]; then \
@@ -5078,14 +5218,45 @@ ${deptype:L}-depends:
 				notfound=1; \
 			fi; \
 		fi; \
-		if [ $$notfound != 0 ]; then \
+		if [ ${_parv_WANT_PARALLEL_BUILD} ] && [ $${notfound} -eq 1 ]; then \
+			( cd $${dir}; ${MAKE} check-lock ) || { \
+			status=$$?; \
+			if [ $${status} -eq ${_parv_MAKE_LOCK_EXIT_STATUS} ]; then \
+				${ECHO_CMD} "===>   $${prog} may be installing now"; \
+				notfound=${_parv_ON_LOCK_EXIT_STATUS}; \
+			else \
+				exit $${status}; \
+			fi; \
+			}; \
+		fi; \
+		if [ ${_parv_WANT_PARALLEL_BUILD} ]; then \
+			( ${_parv_PKG_DBDIR_DO_UNLOCK} ); \
+		fi; \
+		if [ $$notfound -eq 1 ]; then \
 			${ECHO_MSG} "===>    Verifying $$target for $$prog in $$dir"; \
 			if [ ! -d "$$dir" ]; then \
 				${ECHO_MSG} "     => No directory for $$prog.  Skipping.."; \
 			else \
 				${_INSTALL_DEPENDS} \
+				if [ $${spawned} ]; then \
+					active_builds="$${active_builds} $${spawned}:$${i}"; \
+					depends="$${depends%%$${i}*} $${depends##*$${i}}"; \
+					depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
+					spawned=""; \
+					${_parv_PRINT_ACTIVE_BUILDS}; \
+				fi; \
+			fi; \
+		elif [ $${notfound} -eq 0 ]; then \
+			depends="$${depends%%$${i}*} $${depends##*$${i}}"; \
+			depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
+		elif [ $${notfound} -eq ${_parv_ON_LOCK_EXIT_STATUS} ]; then \
+			if [ $$( ${ECHO_CMD} $${depends} | wc -w ) -gt 1 ]; then \
+				depends="$${depends#* } $${depends%% *}"; \
+				depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
 			fi; \
 		fi; \
+		( ${_parv_CHECK_ALL_DEPS_LOCKED} ); \
+		${_PROCESS_ACTIVE_BUILDS}; \
 	done
 .endif
 .else
@@ -5095,7 +5266,15 @@ ${deptype:L}-depends:
 
 lib-depends:
 .if defined(LIB_DEPENDS) && !defined(NO_DEPENDS)
-	@for i in ${LIB_DEPENDS}; do \
+	@if [ ! ${INSTALLS_DEPENDS} ]; then \
+		trap '${_TERMINATE_PROCESS_TREE}' EXIT INT TERM; \
+		trap 'exit 1' INT TERM; \
+	fi; \
+	depends=`${ECHO_CMD} "${LIB_DEPENDS}"`; \
+	depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
+	active_builds=""; \
+	while [ $${#depends} -ne 0 ]; do \
+		i=$${depends%% *}; \
 		lib=$${i%%:*}; \
 		pattern="`${ECHO_CMD} $$lib | ${SED} -E -e 's/\./\\\\./g' -e 's/(\\\\)?\+/\\\\+/g'`"\
 		dir=$${i#*:}; \
@@ -5105,6 +5284,9 @@ lib-depends:
 			depends_args="${DEPENDS_ARGS}"; \
 		else \
 			dir=$${dir%%:*}; \
+		fi; \
+		if [ ${_parv_WANT_PARALLEL_BUILD} ]; then \
+			( attempts=-1; ${_parv_PKG_DBDIR_LOCK_LOOP} ); \
 		fi; \
 		${ECHO_MSG} -n "===>   ${PKGNAME} depends on shared library: $$lib"; \
 		if ${LDCONFIG} ${_LDCONFIG_FLAGS} -r | ${GREP} -vwF -e "${PKGCOMPATDIR}" | ${GREP} -qwE -e "-l$$pattern"; then \
@@ -5119,18 +5301,51 @@ lib-depends:
 			${ECHO_MSG} " - not found"; \
 			notfound=1; \
 		fi; \
-		if [ $$notfound != 0 ]; then \
+		if [ ${_parv_WANT_PARALLEL_BUILD} ] && [ $${notfound} -eq 1 ]; then \
+			( cd $${dir}; ${MAKE} check-lock ) || { \
+			status=$$?; \
+			if [ $${status} -eq ${_parv_MAKE_LOCK_EXIT_STATUS} ]; then \
+				${ECHO_CMD} "===>   $${lib} may be installing now"; \
+				notfound=${_parv_ON_LOCK_EXIT_STATUS}; \
+			else \
+				exit $${status}; \
+			fi; \
+			}; \
+		fi; \
+		if [ ${_parv_WANT_PARALLEL_BUILD} ]; then \
+			( ${_parv_PKG_DBDIR_DO_UNLOCK} ); \
+		fi; \
+		if [ $$notfound -eq 1 ]; then \
 			${ECHO_MSG} "===>    Verifying $$target for $$lib in $$dir"; \
 			if [ ! -d "$$dir" ]; then \
 				${ECHO_MSG} "     => No directory for $$lib.  Skipping.."; \
 			else \
 				${_INSTALL_DEPENDS} \
-				if ! ${LDCONFIG} ${_LDCONFIG_FLAGS} -r | ${GREP} -vwF -e "${PKGCOMPATDIR}" | ${GREP} -qwE -e "-l$$pattern"; then \
-					${ECHO_MSG} "Error: shared library \"$$lib\" does not exist"; \
-					${FALSE}; \
+				if ! [ ${_parv_WANT_PARALLEL_BUILD} ]; then \
+					if ! ${LDCONFIG} ${_LDCONFIG_FLAGS} -r | ${GREP} -vwF -e "${PKGCOMPATDIR}" | ${GREP} -qwE -e "-l$$pattern"; then \
+						${ECHO_MSG} "Error: shared library \"$$lib\" does not exist"; \
+						${FALSE}; \
+					fi; \
+				fi; \
+				if [ $${spawned} ]; then \
+					active_builds="$${active_builds} $${spawned}:$${i}"; \
+					depends="$${depends%%$${i}*} $${depends##*$${i}}"; \
+					depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
+					spawned=""; \
+					${_parv_PRINT_ACTIVE_BUILDS}; \
 				fi; \
 			fi; \
-		fi; \
+		elif [ $${notfound} -eq 0 ]; then \
+			depends="$${depends%%$${i}*} $${depends##*$${i}}"; \
+			depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
+		elif [ $${notfound} -eq ${_parv_ON_LOCK_EXIT_STATUS} ]; then \
+			if [ $$( ${ECHO_CMD} $${depends} | wc -w ) -gt 1 ]; then \
+				depends="$${depends#* } $${depends%% *}"; \
+				depends=$$( echo "$${depends}" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$$//' ); \
+ 			fi; \
+ 		fi; \
+ 		( ${_parv_CHECK_ALL_DEPS_LOCKED} ); \
+ 		${_PROCESS_ACTIVE_BUILDS}; \
 	done
 .endif
 
